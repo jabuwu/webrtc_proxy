@@ -1,0 +1,33 @@
+server {
+    listen 14193 ssl;
+    listen [::]:14193 ssl;
+
+    ssl on;
+    ssl_certificate     /webrtc_proxy/server/fullchain.pem;
+    ssl_certificate_key /webrtc_proxy/server/privkey.pem;
+
+    root /var/www/html;
+
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:14191;
+    }
+}
+
+server {
+    listen 14194 ssl;
+    listen [::]:14194 ssl;
+
+    ssl on;
+    ssl_certificate     /webrtc_proxy/server/fullchain.pem;
+    ssl_certificate_key /webrtc_proxy/server/privkey.pem;
+
+    root /var/www/html;
+
+    server_name _;
+
+    location / {
+        proxy_pass http://127.0.0.1:14192;
+    }
+}
