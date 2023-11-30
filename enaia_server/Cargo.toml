@@ -1,0 +1,9 @@
+[package]
+name = "enaia_server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+naia-server-socket = "0.20.0"
+naia-socket-shared = "0.20.0"
+rusty_enet = { git = "https://github.com/jabuwu/rusty_enet", rev = "80db6cb24bee3480f01b6da38b1d65415d9dd10d" }
