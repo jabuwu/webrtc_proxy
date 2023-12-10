@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use enaia_client::EnaiaClient;
-use rusty_enet::{Event, Host, HostSettings, Packet, PeerID};
+use rusty_enet::{crc32, Event, Host, HostSettings, Packet, PeerID, RangeCoder};
 use web_time::Instant;
 
 fn unspecified_address(address: SocketAddr) -> SocketAddr {
@@ -36,6 +36,8 @@ impl Proxied {
             HostSettings {
                 peer_limit: 1,
                 channel_limit: 1,
+                compressor: Some(Box::new(RangeCoder::new())),
+                checksum: Some(Box::new(crc32)),
                 ..Default::default()
             },
         )?;

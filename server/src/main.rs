@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use enaia_server::{EnaiaServer, ServerAddrs};
-use rusty_enet::{Event, Host, HostSettings, Packet, PeerID};
+use rusty_enet::{crc32, Event, Host, HostSettings, Packet, PeerID, RangeCoder};
 
 mod channel;
 mod echo;
@@ -37,6 +37,8 @@ fn main() {
         HostSettings {
             peer_limit: 4095,
             channel_limit: 255,
+            compressor: Some(Box::new(RangeCoder::new())),
+            checksum: Some(Box::new(crc32)),
             ..Default::default()
         },
     )
