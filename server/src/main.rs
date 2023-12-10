@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Result;
 use enaia_server::{EnaiaServer, ServerAddrs};
-use rusty_enet::{Event, Host, Packet, PeerID};
+use rusty_enet::{Event, Host, HostSettings, Packet, PeerID};
 
 mod channel;
 mod echo;
@@ -18,7 +18,7 @@ pub use echo::*;
 pub use tcp::*;
 pub use udp::*;
 
-struct Peer {
+struct Tunnel {
     channels: HashMap<u8, Channel>,
 }
 
@@ -32,34 +32,40 @@ fn main() {
             .expect("could not parse WebRTC data address/port"),
         "http://127.0.0.1:14192",
     );
-    let mut network = Host::<EnaiaServer>::create(address, 4095, 255, 0, 0).unwrap();
-    let mut peers = HashMap::<PeerID, Peer>::new();
+    let mut network = Host::create(
+        EnaiaServer::new(address).unwrap(),
+        HostSettings {
+            peer_limit: 4095,
+            channel_limit: 255,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let mut tunnels = HashMap::<PeerID, Tunnel>::new();
     loop {
         while let Some(event) = network.service().unwrap() {
-            match &event {
+            match event {
                 Event::Connect { peer, .. } => {
-                    peers.insert(
-                        *peer,
-                        Peer {
+                    tunnels.insert(
+                        peer.id(),
+                        Tunnel {
                             channels: HashMap::default(),
                         },
                     );
                 }
                 Event::Disconnect { peer, .. } => {
-                    peers.remove(peer);
+                    tunnels.remove(&peer.id());
                 }
                 Event::Receive {
-                    peer: peer_id,
+                    peer,
                     channel_id,
                     packet,
                 } => {
-                    if let Some(peer) = peers.get_mut(peer_id) {
-                        if let Some(channel) = peer.channels.get_mut(channel_id) {
+                    if let Some(tunnel) = tunnels.get_mut(&peer.id()) {
+                        if let Some(channel) = tunnel.channels.get_mut(&channel_id) {
                             if let Err(_) = channel.send(packet.data()) {
-                                if let Err(_) =
-                                    network.send(*peer_id, *channel_id, Packet::reliable(&[0]))
-                                {
-                                    _ = network.disconnect(*peer_id, 0);
+                                if let Err(_) = peer.send(channel_id, Packet::reliable(&[0])) {
+                                    peer.disconnect(0);
                                 }
                             }
                         } else {
@@ -68,14 +74,13 @@ fn main() {
                                 .and_then(|str| serde_json::from_str::<ChannelConfig>(str).ok())
                             {
                                 Some(channel_config) => {
-                                    peer.channels
-                                        .insert(*channel_id, Channel::new(channel_config));
+                                    tunnel
+                                        .channels
+                                        .insert(channel_id, Channel::new(channel_config));
                                 }
                                 None => {
-                                    if let Err(_) =
-                                        network.send(*peer_id, *channel_id, Packet::reliable(&[0]))
-                                    {
-                                        _ = network.disconnect(*peer_id, 0);
+                                    if let Err(_) = peer.send(channel_id, Packet::reliable(&[0])) {
+                                        peer.disconnect(0);
                                     }
                                 }
                             }
@@ -84,25 +89,28 @@ fn main() {
                 }
             }
         }
-        for (peer_id, peer) in peers.iter_mut() {
-            let mut disconnected_channels = vec![];
-            for (channel_id, channel) in peer.channels.iter_mut() {
-                if let Err(_) = || -> Result<()> {
-                    while let Some(mut data) = channel.receive()? {
-                        let mut packet_data = vec![1];
-                        packet_data.append(&mut data);
-                        network.send(*peer_id, *channel_id, Packet::reliable(&packet_data))?;
+        for (peer_id, tunnel) in tunnels.iter_mut() {
+            if let Ok(peer) = network.peer_mut(*peer_id) {
+                let mut disconnected_channels = vec![];
+                for (channel_id, channel) in tunnel.channels.iter_mut() {
+                    if let Err(_) = || -> Result<()> {
+                        while let Some(mut data) = channel.receive()? {
+                            let mut packet_data = vec![1];
+                            packet_data.append(&mut data);
+                            peer.send(*channel_id, Packet::reliable(&packet_data))?;
+                        }
+                        Ok(())
+                    }() {
+                        if let Err(_) = peer.send(*channel_id, Packet::reliable(&[0])) {
+                            peer.disconnect(0);
+                        }
+                        disconnected_channels.push(*channel_id);
                     }
-                    Ok(())
-                }() {
-                    if let Err(_) = network.send(*peer_id, *channel_id, Packet::reliable(&[0])) {
-                        _ = network.disconnect(*peer_id, 0);
-                    }
-                    disconnected_channels.push(*channel_id);
                 }
+                tunnel
+                    .channels
+                    .retain(|channel_id, _| !disconnected_channels.contains(channel_id));
             }
-            peer.channels
-                .retain(|channel_id, _| !disconnected_channels.contains(channel_id));
         }
         std::thread::sleep(Duration::from_millis(10));
     }

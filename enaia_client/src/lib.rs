@@ -39,20 +39,17 @@ pub enum EnaiaClient {
     },
 }
 
+impl EnaiaClient {
+    pub fn new() -> Self {
+        Self::Disconnected
+    }
+}
+
 impl rusty_enet::Socket for EnaiaClient {
-    type BindAddress = ();
     type PeerAddress = EnaiaUrl;
     type Error = NaiaClientSocketError;
 
-    fn bind(_: ()) -> Result<Self, NaiaClientSocketError> {
-        Ok(EnaiaClient::Disconnected)
-    }
-
-    fn set_option(
-        &mut self,
-        _option: rusty_enet::SocketOption,
-        _value: i32,
-    ) -> Result<(), NaiaClientSocketError> {
+    fn init(&mut self, _options: rusty_enet::SocketOptions) -> Result<(), NaiaClientSocketError> {
         Ok(())
     }
 
@@ -89,7 +86,8 @@ impl rusty_enet::Socket for EnaiaClient {
     fn receive(
         &mut self,
         _mtu: usize,
-    ) -> Result<Option<(Self::PeerAddress, Vec<u8>)>, NaiaClientSocketError> {
+    ) -> Result<Option<(Self::PeerAddress, rusty_enet::PacketReceived)>, NaiaClientSocketError>
+    {
         if let EnaiaClient::Connected {
             server_address,
             packet_sender: _,
@@ -97,7 +95,10 @@ impl rusty_enet::Socket for EnaiaClient {
         } = self
         {
             match packet_receiver.receive() {
-                Ok(Some(payload)) => Ok(Some((server_address.clone(), Vec::from(payload)))),
+                Ok(Some(payload)) => Ok(Some((
+                    server_address.clone(),
+                    rusty_enet::PacketReceived::Complete(Vec::from(payload)),
+                ))),
                 Ok(None) => Ok(None),
                 Err(err) => Err(err.into()),
             }

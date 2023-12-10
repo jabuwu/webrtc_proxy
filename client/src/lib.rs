@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{bail, Result};
 use enaia_client::EnaiaClient;
-use rusty_enet::{Event, Host, Packet, PeerID};
+use rusty_enet::{Event, Host, HostSettings, Packet, PeerID};
 use web_time::Instant;
 
 fn unspecified_address(address: SocketAddr) -> SocketAddr {
@@ -31,8 +31,15 @@ pub struct Proxied {
 
 impl Proxied {
     pub fn connect(address: SocketAddr, proxy: String, protocol: &'static str) -> Result<Self> {
-        let mut host = Host::<EnaiaClient>::create((), 1, 1, 0, 0)?;
-        let peer = host.connect(proxy.into(), 1, 0)?;
+        let mut host = Host::<EnaiaClient>::create(
+            EnaiaClient::new(),
+            HostSettings {
+                peer_limit: 1,
+                channel_limit: 1,
+                ..Default::default()
+            },
+        )?;
+        let peer = host.connect(proxy.into(), 1, 0)?.id();
         Ok(Self {
             address,
             protocol,
@@ -58,7 +65,11 @@ impl Proxied {
     pub fn send(&mut self, data: &[u8]) -> Result<()> {
         self.service()?;
         if self.connected {
-            if let Err(_) = self.host.send(self.peer, 0, Packet::reliable(data)) {
+            if let Err(_) = self
+                .host
+                .peer_mut(self.peer)
+                .and_then(|peer| peer.send(0, Packet::reliable(data)))
+            {
                 self.disconnect();
                 bail!("Socket not connected.");
             }
@@ -79,13 +90,14 @@ impl Proxied {
         }
         match self.host.service() {
             Ok(Some(Event::Connect { .. })) => {
-                if let Err(_) = self.host.send(
-                    self.peer,
-                    0,
-                    Packet::reliable(
-                        format!("{{\"{}\":\"{}\"}}", self.protocol, self.address).as_bytes(),
-                    ),
-                ) {
+                if let Err(_) = self.host.peer_mut(self.peer).and_then(|peer| {
+                    peer.send(
+                        0,
+                        Packet::reliable(
+                            format!("{{\"{}\":\"{}\"}}", self.protocol, self.address).as_bytes(),
+                        ),
+                    )
+                }) {
                     self.disconnect();
                     bail!("Disconnected.");
                 }
@@ -132,7 +144,9 @@ impl Proxied {
     fn disconnect(&mut self) {
         self.connected = false;
         self.disconnected = true;
-        _ = self.host.disconnect(self.peer, 0);
+        if let Ok(peer) = self.host.peer_mut(self.peer) {
+            _ = peer.disconnect(0);
+        }
     }
 }
 

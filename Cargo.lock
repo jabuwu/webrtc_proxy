@@ -4299,7 +4299,7 @@ dependencies = [
 [[package]]
 name = "rusty_enet"
 version = "0.1.0"
-source = "git+https://github.com/jabuwu/rusty_enet?rev=80db6cb24bee3480f01b6da38b1d65415d9dd10d#80db6cb24bee3480f01b6da38b1d65415d9dd10d"
+source = "git+https://github.com/jabuwu/rusty_enet?rev=dca889b30b350c9ca63f9a0b67d46328cfda4f37#dca889b30b350c9ca63f9a0b67d46328cfda4f37"
 dependencies = [
  "thiserror",
  "wasm-timer",

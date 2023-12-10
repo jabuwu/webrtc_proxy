@@ -6,5 +6,5 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.75"
 enaia_client.path = "../enaia_client"
-rusty_enet = { git = "https://github.com/jabuwu/rusty_enet", rev = "80db6cb24bee3480f01b6da38b1d65415d9dd10d" }
+rusty_enet = { git = "https://github.com/jabuwu/rusty_enet", rev = "dca889b30b350c9ca63f9a0b67d46328cfda4f37" }
 web-time = "0.2.3"

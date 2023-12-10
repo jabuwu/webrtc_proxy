@@ -10,12 +10,8 @@ pub struct EnaiaServer {
     packet_receiver: Box<dyn PacketReceiver>,
 }
 
-impl rusty_enet::Socket for EnaiaServer {
-    type BindAddress = ServerAddrs;
-    type PeerAddress = SocketAddr;
-    type Error = NaiaServerSocketError;
-
-    fn bind(server_address: ServerAddrs) -> Result<Self, NaiaServerSocketError> {
+impl EnaiaServer {
+    pub fn new(server_address: ServerAddrs) -> Result<Self, NaiaServerSocketError> {
         let (packet_sender, packet_receiver) = Socket::listen(
             &server_address,
             &SocketConfig::new(Some(LinkConditionerConfig::new(0, 0, 0.)), None),
@@ -25,12 +21,13 @@ impl rusty_enet::Socket for EnaiaServer {
             packet_receiver,
         })
     }
+}
 
-    fn set_option(
-        &mut self,
-        _option: rusty_enet::SocketOption,
-        _value: i32,
-    ) -> Result<(), NaiaServerSocketError> {
+impl rusty_enet::Socket for EnaiaServer {
+    type PeerAddress = SocketAddr;
+    type Error = NaiaServerSocketError;
+
+    fn init(&mut self, _options: rusty_enet::SocketOptions) -> Result<(), NaiaServerSocketError> {
         Ok(())
     }
 
@@ -46,9 +43,13 @@ impl rusty_enet::Socket for EnaiaServer {
     fn receive(
         &mut self,
         _mtu: usize,
-    ) -> Result<Option<(Self::PeerAddress, Vec<u8>)>, NaiaServerSocketError> {
+    ) -> Result<Option<(Self::PeerAddress, rusty_enet::PacketReceived)>, NaiaServerSocketError>
+    {
         match self.packet_receiver.receive() {
-            Ok(Some((address, payload))) => Ok(Some((address, Vec::from(payload)))),
+            Ok(Some((address, payload))) => Ok(Some((
+                address,
+                rusty_enet::PacketReceived::Complete(Vec::from(payload)),
+            ))),
             Ok(None) => Ok(None),
             Err(err) => Err(err.into()),
         }
