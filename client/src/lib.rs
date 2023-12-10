@@ -64,13 +64,13 @@ impl Proxied {
         }
     }
 
-    pub fn send(&mut self, data: &[u8]) -> Result<()> {
+    pub fn send(&mut self, packet: Packet) -> Result<()> {
         self.service()?;
         if self.connected {
             if let Err(_) = self
                 .host
                 .peer_mut(self.peer)
-                .and_then(|peer| peer.send(0, Packet::reliable(data)))
+                .and_then(|peer| peer.send(0, packet))
             {
                 self.disconnect();
                 bail!("Socket not connected.");
@@ -204,7 +204,7 @@ impl TcpStream {
                     bail!("Disconnected.");
                 }
             }
-            Self::Proxied(proxied) => proxied.send(data),
+            Self::Proxied(proxied) => proxied.send(Packet::reliable(data)),
         }
     }
 
@@ -294,7 +294,7 @@ impl UdpSocket {
                     bail!("Disconnected.");
                 }
             }
-            Self::Proxied(proxied) => proxied.send(data),
+            Self::Proxied(proxied) => proxied.send(Packet::unreliable_unsequenced(data)),
         }
     }
 

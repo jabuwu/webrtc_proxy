@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{bail, Result};
+use rusty_enet::Packet;
 use serde::{Deserialize, Serialize};
 
 use crate::{EchoChannelStream, TcpChannelStream, UdpChannelStream};
@@ -25,14 +26,14 @@ pub enum ChannelStatus {
 }
 
 pub struct Channel {
-    sender: mpsc::Sender<Vec<u8>>,
-    receiver: mpsc::Receiver<Vec<u8>>,
+    sender: mpsc::Sender<Packet>,
+    receiver: mpsc::Receiver<Packet>,
 }
 
 impl Channel {
     pub fn new(config: ChannelConfig) -> Self {
-        let (sender, channel_receiver) = mpsc::channel::<Vec<u8>>();
-        let (channel_sender, receiver) = mpsc::channel::<Vec<u8>>();
+        let (sender, channel_receiver) = mpsc::channel::<Packet>();
+        let (channel_sender, receiver) = mpsc::channel::<Packet>();
         std::thread::spawn(move || {
             let Ok(mut channel) = || -> Result<Box<dyn ChannelStream>> {
                 Ok(match config {
@@ -50,12 +51,12 @@ impl Channel {
                         ChannelStatus::Connecting => {}
                         ChannelStatus::Connected => {
                             if !connected {
-                                sender.send(vec![])?;
+                                sender.send(Packet::reliable(&[]))?;
                                 connected = true;
                             }
                             match receiver.recv_timeout(Duration::ZERO) {
-                                Ok(data) => {
-                                    channel.send(&data)?;
+                                Ok(packet) => {
+                                    channel.send(packet)?;
                                 }
                                 Err(RecvTimeoutError::Timeout) => {}
                                 Err(_) => bail!("Disconnected"),
@@ -81,14 +82,14 @@ impl Channel {
         }
     }
 
-    pub fn send(&mut self, data: &[u8]) -> Result<()> {
-        self.sender.send(data.to_vec())?;
+    pub fn send(&mut self, packet: Packet) -> Result<()> {
+        self.sender.send(packet)?;
         Ok(())
     }
 
-    pub fn receive(&mut self) -> Result<Option<Vec<u8>>> {
+    pub fn receive(&mut self) -> Result<Option<Packet>> {
         match self.receiver.recv_timeout(Duration::ZERO) {
-            Ok(data) => Ok(Some(data)),
+            Ok(packet) => Ok(Some(packet)),
             Err(RecvTimeoutError::Timeout) => Ok(None),
             Err(err) => Err(err.into()),
         }
@@ -97,6 +98,6 @@ impl Channel {
 
 pub trait ChannelStream {
     fn status(&mut self) -> Result<ChannelStatus>;
-    fn send(&mut self, data: &[u8]) -> Result<()>;
-    fn receive(&mut self) -> Result<Option<Vec<u8>>>;
+    fn send(&mut self, data: Packet) -> Result<()>;
+    fn receive(&mut self) -> Result<Option<Packet>>;
 }

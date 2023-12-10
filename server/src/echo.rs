@@ -4,12 +4,13 @@ use std::{
 };
 
 use anyhow::Result;
+use rusty_enet::Packet;
 
 use crate::{ChannelStatus, ChannelStream};
 
 pub struct EchoChannelStream {
     instant: Instant,
-    packets: VecDeque<Vec<u8>>,
+    packets: VecDeque<Packet>,
 }
 
 impl EchoChannelStream {
@@ -30,12 +31,12 @@ impl ChannelStream for EchoChannelStream {
         }
     }
 
-    fn send(&mut self, data: &[u8]) -> Result<()> {
-        self.packets.push_back(data.to_vec());
+    fn send(&mut self, packet: Packet) -> Result<()> {
+        self.packets.push_back(packet);
         Ok(())
     }
 
-    fn receive(&mut self) -> Result<Option<Vec<u8>>> {
+    fn receive(&mut self) -> Result<Option<Packet>> {
         Ok(self.packets.pop_front())
     }
 }

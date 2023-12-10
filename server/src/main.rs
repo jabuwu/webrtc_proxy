@@ -65,7 +65,7 @@ fn main() {
                 } => {
                     if let Some(tunnel) = tunnels.get_mut(&peer.id()) {
                         if let Some(channel) = tunnel.channels.get_mut(&channel_id) {
-                            if let Err(_) = channel.send(packet.data()) {
+                            if let Err(_) = channel.send(packet) {
                                 if let Err(_) = peer.send(channel_id, Packet::reliable(&[0])) {
                                     peer.disconnect(0);
                                 }
@@ -96,10 +96,11 @@ fn main() {
                 let mut disconnected_channels = vec![];
                 for (channel_id, channel) in tunnel.channels.iter_mut() {
                     if let Err(_) = || -> Result<()> {
-                        while let Some(mut data) = channel.receive()? {
+                        while let Some(packet) = channel.receive()? {
+                            let packet_kind = packet.kind();
                             let mut packet_data = vec![1];
-                            packet_data.append(&mut data);
-                            peer.send(*channel_id, Packet::reliable(&packet_data))?;
+                            packet_data.extend(packet.data());
+                            peer.send(*channel_id, Packet::new(&packet_data, packet_kind))?;
                         }
                         Ok(())
                     }() {
